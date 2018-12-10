@@ -29,6 +29,7 @@ class ProbModel:
         for t in range(n_steps):
             x_next = self.step(x_next, rng)
             simulation.append(x_next)
+        return simulation
 
     def clone(self) -> 'ProbModel':
         """Return a clone of this model with the same state"""
