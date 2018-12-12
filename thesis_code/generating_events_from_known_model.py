@@ -52,12 +52,14 @@ class ProbModel:
         simulation = [self.step(rng) for _ in range(n_steps)]
         return simulation
 
+
     def clone(self) -> 'ProbModel':
         """Return a clone of this model with the same state"""
         return copy.deepcopy(self)
 
 
 def make_buy_sell_events(futures, transaction_cost, strategy) -> Sequence[Tuple[str, int]]:
+    pass
     
 
 
@@ -76,10 +78,10 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, n_run_steps 
 
     true_future = prob_model.simulate(n_steps=n_eval_steps, rng=rng)
 
-    # plt.plot(context, c='r')
-    # plt.plot((np.arange(n_run_steps, n_run_steps+n_eval_steps)*np.ones(np.shape(futures))).T, np.array(futures).T, alpha=0.5, c='b')
-    # plt.plot(np.arange(n_run_steps, n_run_steps+n_eval_steps), true_future, c='r')
-    # plt.show()
+    plt.plot(context, c='r')
+    plt.plot((np.arange(n_run_steps, n_run_steps+n_eval_steps)*np.ones(np.shape(futures))).T, np.array(futures).T, alpha=0.5, c='b')
+    plt.plot(np.arange(n_run_steps, n_run_steps+n_eval_steps), true_future, c='r')
+    plt.show()
 
     events = event_function(futures, transaction_cost=transaction_cost)
 
