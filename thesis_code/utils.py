@@ -5,13 +5,13 @@ import os
 
 
 def ECDF(data, samples):
-    ecdf = [np.sum(np.where( sample <= data, 1, 0)) for sample in samples]
-    return ecdf/len(data)
+    ecdf = [np.sum(np.where( sample >= data, 1, 0)) for sample in samples]
+    return ecdf
 
     
 def KDE(data, samples, bandwidth):
     cdf = np.sum([norm(0).cdf((data-xi)/bandwidth) for xi in samples], axis=1)
-    return cdf/len(data)
+    return cdf
 
 
 def get_cdf(data, samples, method='ecdf', bandwidth='1.0'):
@@ -25,8 +25,11 @@ def get_cdf(data, samples, method='ecdf', bandwidth='1.0'):
 
 def value_at_risk(samples, alpha=5):
     N = len(samples)
+    
+    
     samples.sort()
-    var = np.percentile(samples, 100-alpha)
+    var = np.percentile(samples, alpha)
+    
     return var
 
 def expected_shortfall(samples, alpha=5):
