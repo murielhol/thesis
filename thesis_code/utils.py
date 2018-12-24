@@ -6,12 +6,12 @@ import os
 
 def ECDF(data, samples):
     ecdf = [np.sum(np.where( sample >= data, 1, 0)) for sample in samples]
-    return ecdf
+    return np.divide(ecdf,len(data))
 
     
 def KDE(data, samples, bandwidth):
     cdf = np.sum([norm(0).cdf((data-xi)/bandwidth) for xi in samples], axis=1)
-    return cdf
+    return np.divide(cdf,len(data))
 
 
 def get_cdf(data, samples, method='ecdf', bandwidth='1.0'):

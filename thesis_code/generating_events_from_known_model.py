@@ -1,7 +1,8 @@
 from typing import Sequence, Tuple, Callable
 import numpy as np
 import matplotlib.pyplot as plt
-plt.close()
+import seaborn as sns
+sns.set(style="whitegrid")
 import copy
 import os
 import pandas as pd
@@ -29,6 +30,8 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
     :return:
     """
     amount=0
+    print(events)
+    print(np.max(timeseries))
     for event_type, price, time_step in events:
         if event_type=='buy':
             # market order are time specific, and cost a fee
@@ -90,17 +93,18 @@ class ProbModel:
         return copy.deepcopy(self)
 
 
-def make_buy_sell_events(futures, strategy, transaction_cost, reduce_risk) -> Sequence[Tuple[str, float, int]]:
+def make_buy_sell_events(futures, strategy, transaction_cost, reduce_risk, order_type) -> Sequence[Tuple[str, float, int]]:
     """
     tuple in form of: ('event', price, moment)
     """
-    events = eval(strategy)(futures, reduce_risk, format='price', transaction_cost=transaction_cost)
+    events = eval(strategy)(futures, reduce_risk, order_method=order_type, transaction_cost=transaction_cost)
     return events
     
 
 def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: str, n_run_steps = 10, 
-                    n_eval_steps = 10, transaction_cost=1, reduce_risk=False, order_type='market_order', 
+                    n_eval_steps = 10, transaction_cost=1, reduce_risk=0., order_type='market_order', 
                     n_simulations=1000, initial_seed=1234, make_fig=False):
+    transaction_cost = transaction_cost if order_type == 'market_order' else 0.0
 
     rng = np.random.RandomState(initial_seed)
     context = prob_model.simulate(n_steps=n_run_steps, rng=rng)
@@ -116,13 +120,13 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
     true_future = prob_model.simulate(n_steps=n_eval_steps, rng = np.random.RandomState(initial_seed+n_simulations))
     true_future.insert(0, context[-1])
 
-    events = event_function(futures, strategy, transaction_cost, reduce_risk)
+    events = event_function(futures, strategy, transaction_cost, reduce_risk, order_type)
     if events:
         roi = compute_roi(true_future, events, transaction_cost, order_type )
     else:
         roi = 0
 
-    true_events = event_function([true_future], strategy, transaction_cost, reduce_risk=False)
+    true_events = event_function([true_future], strategy, transaction_cost, reduce_risk=0.)
     if true_events:
         target_roi = compute_roi(true_future, true_events, transaction_cost, order_type )
     else:
@@ -135,12 +139,14 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
         plt.plot(context, c='r')
         plt.plot((np.arange(n_run_steps, n_run_steps+n_eval_steps+1)*np.ones(np.shape(futures))).T, np.array(futures).T, alpha=0.5, c='b')
         plt.plot(np.arange(n_run_steps, n_run_steps+n_eval_steps+1), true_future, c='r')
-        for event in events:
-            color = 'm' if event[0] == 'buy' else 'g'
-            plt.axvline(x=event[-1]+n_run_steps, label=event[0], c=color)
-        for event in true_events:
-            color = 'y' if event[0] == 'buy' else 'c'
-            plt.axvline(x=event[-1]+n_run_steps, label='true_'+event[0], c=color)
+        if events:
+            for event in events:
+                color = 'm' if event[0] == 'buy' else 'g'
+                plt.axvline(x=event[-1]+n_run_steps, label=event[0], c=color)
+        if true_events:
+            for event in true_events:
+                color = 'y' if event[0] == 'buy' else 'c'
+                plt.axvline(x=event[-1]+n_run_steps, label='true_'+event[0], c=color)
         plt.legend()
         plt.savefig('experiment_'+strategy+'_'+str(prob_model.seed)+'.png')
         plt.show()
@@ -210,7 +216,6 @@ def strategy_vs_sample_size():
     plt.savefig('strategy_vs_sample_size/images/simulations_per_trial.png')
     plt.show()
 
-
 def order_type_vs_strategy():
 
     make_dirs('order_type_vs_strategy')
@@ -227,9 +232,12 @@ def order_type_vs_strategy():
     
     df = pd.DataFrame([])
 
-    colors = ['r', 'b', 'g', 'm']
-    i = 0
-    plt.figure('order_type_vs_strategy')
+    errors = []
+    gains = []
+    aims = []
+    labels = []
+
+    f, axarr = plt.subplots(2, 1)
     for strategy in [1,2]:
         print('strategy: ', str(strategies(strategy).name))
         for order_type in [1,2]:
@@ -237,11 +245,30 @@ def order_type_vs_strategy():
             estimates, targets = run_experiments(trials, simulations_per_trial, strategy, order_type, transaction_cost, input_seq_len, output_seq_len,
                             x_noise, v_noise, m_noise, reduce_risk)            
             error = np.mean(np.subtract(targets,estimates))
-            plt.bar(i, error, label = str(strategies(strategy).name)+'/'+str(order_types(order_type).name) )
-    plt.legend()
+            errors.append(error)
+            gains.append(np.sum(estimates))
+            aims.append(np.sum(targets))
+            labels.append(str(strategies(strategy).name)+'\n'+str(order_types(order_type).name) )
+
+
+    axarr[0].bar([1,2], [errors[0], errors[2]] , label = str(order_types(1).name))
+    axarr[0].bar([1,2], [errors[1], errors[3]] , label = str(order_types(2).name),bottom=[errors[0], errors[2]])
+    plt.setp(axarr[0], xticks=[1, 2], xticklabels=[str(strategies(1).name), str(strategies(2).name)])
+    # axarr[0].set_xticks([1,2], )
+
+    X1 = np.array([0, 1, 3, 4])
+    X2 = np.array([0.9, 1.9, 3.9, 4.9])
+    axarr[1].bar(X1, gains, width=0.4, label = 'estimate' , color = 'b')
+    axarr[1].bar(X2-0.5, aims, width=0.4, label = 'target' , color='r')
+    plt.setp(axarr[1], xticks=[0.25, 1.25, 3.25, 4.24], xticklabels=[str(order_types(1).name), str(order_types(2).name),
+                                                     str(order_types(1).name), str(order_types(2).name)])
+    
+    axarr[0].legend()
+    axarr[1].legend()
+    axarr[0].set_ylabel('Error')
+    axarr[1].set_ylabel('Total ROI') 
     plt.savefig('order_type_vs_strategy/images/order_type_vs_strategy.png')
     plt.show()
-
 
 def strategy_vs_transaction_cost():
 
@@ -285,7 +312,7 @@ def noise_vs_risk():
     x_noise_initial = 0.1
     v_noise_initial = 0.08
     m_noise = 0.05
-    order_type = 1
+    order_type = 2
     transaction_cost = 0.05
     input_seq_len = 100
     output_seq_len = 50
@@ -322,15 +349,15 @@ def show_an_example():
     x_noise = 0.1
     v_noise = 0.08
     m_noise = 0.05
-    reduce_risk = False
-    order_type = 1
+    reduce_risk = 0.7
+    order_type = 2
     transaction_cost = 0.05
     input_seq_len = 100
     output_seq_len = 50
     strategy = 1
 
-    evaluate_model(
-        prob_model=ProbModel(10, measurement_noise=m_noise, x_noise = x_noise , v_noise = v_noise),
+    print(evaluate_model(
+        prob_model=ProbModel(4, measurement_noise=m_noise, x_noise = x_noise , v_noise = v_noise),
         event_function=make_buy_sell_events,
         strategy = str(strategies(strategy).name),
         n_run_steps = input_seq_len, 
@@ -340,11 +367,11 @@ def show_an_example():
         reduce_risk = reduce_risk,
         order_type = str(order_types(order_type).name),
         make_fig = True
-        )
+        ))
 
 if __name__ == '__main__':
 
-    noise_vs_risk()
+    show_an_example()
 
 
    
