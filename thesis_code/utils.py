@@ -9,8 +9,8 @@ def ECDF(data, samples):
     return np.divide(ecdf,len(data))
 
     
-def KDE(data, samples, bandwidth):
-    cdf = np.sum([norm(0).cdf((data-xi)/bandwidth) for xi in samples], axis=1)
+def KDE(data, samples, bandwidth=0.1):
+    cdf = np.sum([norm(0).cdf((xi-data)/bandwidth) for xi in samples], axis=1)
     return np.divide(cdf,len(data))
 
 
@@ -25,8 +25,6 @@ def get_cdf(data, samples, method='ecdf', bandwidth='1.0'):
 
 def value_at_risk(samples, alpha=5):
     N = len(samples)
-    
-    
     samples.sort()
     var = np.percentile(samples, alpha)
     
@@ -35,6 +33,11 @@ def value_at_risk(samples, alpha=5):
 def expected_shortfall(samples, alpha=5):
     var = value_at_risk(samples, alpha=alpha)
     risky_samples = [s for s in samples if s < var]
+    return np.mean(risky_samples)
+
+def expected_highfall(samples, alpha=95):
+    var = value_at_risk(samples, alpha=alpha)
+    risky_samples = [s for s in samples if s > var]
     return np.mean(risky_samples)
 
 

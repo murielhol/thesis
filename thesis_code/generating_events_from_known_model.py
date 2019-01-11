@@ -9,7 +9,7 @@ import pandas as pd
 
 from enum import Enum
 
-from strategies import *
+from strategies_v2 import *
 
 
 class strategies(Enum):
@@ -30,8 +30,6 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
     :return:
     """
     amount=0
-    print(events)
-    print(np.max(timeseries))
     for event_type, price, time_step in events:
         if event_type=='buy':
             # market order are time specific, and cost a fee
@@ -50,7 +48,6 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
                 if options:
                     amount += options[0]
     return amount
-
 
 
 class ProbModel:
@@ -87,7 +84,6 @@ class ProbModel:
         simulation = [self.step(rng) for _ in range(n_steps)]
         return simulation
 
-
     def clone(self) -> 'ProbModel':
         """Return a clone of this model with the same state"""
         return copy.deepcopy(self)
@@ -104,7 +100,9 @@ def make_buy_sell_events(futures, strategy, transaction_cost, reduce_risk, order
 def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: str, n_run_steps = 10, 
                     n_eval_steps = 10, transaction_cost=1, reduce_risk=0., order_type='market_order', 
                     n_simulations=1000, initial_seed=1234, make_fig=False):
-    transaction_cost = transaction_cost if order_type == 'market_order' else 0.0
+    # limit orders have no transaction costs
+    if order_type == 'limit_order':
+        transaction_cost = 0.0 
 
     rng = np.random.RandomState(initial_seed)
     context = prob_model.simulate(n_steps=n_run_steps, rng=rng)
@@ -126,13 +124,11 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
     else:
         roi = 0
 
-    true_events = event_function([true_future], strategy, transaction_cost, reduce_risk=0.)
+    true_events = event_function([true_future], strategy, transaction_cost, 0.0, order_type)
     if true_events:
-        target_roi = compute_roi(true_future, true_events, transaction_cost, order_type )
+        target_roi = compute_roi(true_future, true_events, transaction_cost, order_type)
     else:
         target_roi = 0
-
-
 
     if make_fig:
         plt.figure()
@@ -143,12 +139,14 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
             for event in events:
                 color = 'm' if event[0] == 'buy' else 'g'
                 plt.axvline(x=event[-1]+n_run_steps, label=event[0], c=color)
+                plt.axhline(y=event[1], label='price_'+event[0], c=color)
         if true_events:
             for event in true_events:
                 color = 'y' if event[0] == 'buy' else 'c'
                 plt.axvline(x=event[-1]+n_run_steps, label='true_'+event[0], c=color)
+                
         plt.legend()
-        plt.savefig('experiment_'+strategy+'_'+str(prob_model.seed)+'.png')
+        # plt.savefig('experiment_'+strategy+'_'+str(prob_model.seed)+'.png')
         plt.show()
 
 
@@ -181,7 +179,7 @@ def run_experiments(trials, simulations_per_trial, strategy, order_type, transac
 
 
 
-def strategy_vs_sample_size():
+def strategy_vs_sample_size(experiment_name='experiment'):
 
     make_dirs('strategy_vs_sample_size')
 
@@ -190,13 +188,13 @@ def strategy_vs_sample_size():
     m_noise = 0.05
     reduce_risk = False
     order_type = 1
-    transaction_cost = 0.05
+    transaction_cost = 0.02
     input_seq_len = 100
     output_seq_len = 50
     trials = 500
     
     df = pd.DataFrame([])
-    df['simulations_per_trial'] = [100, 500, 1000, 1500, 2000]
+    df['simulations_per_trial'] = [50, 100, 500, 1000]
 
     colors = ['r', 'b']
     plt.figure('strategy_vs_sample_size')
@@ -212,8 +210,8 @@ def strategy_vs_sample_size():
         plt.plot([100, 500, 1000, 1500, 2000], errors, c=colors[strategy-1], label = str(strategies(strategy).name) )
         df[str(strategies(strategy).name)] = errors
     plt.legend()
-    df.to_csv('strategy_vs_sample_size/results/simulations_per_trial.png')
-    plt.savefig('strategy_vs_sample_size/images/simulations_per_trial.png')
+    df.to_csv('strategy_vs_sample_size/results/'+experiment_name+'.png')
+    plt.savefig('strategy_vs_sample_size/images/'+experiment_name+'.png')
     plt.show()
 
 def order_type_vs_strategy():
@@ -223,7 +221,7 @@ def order_type_vs_strategy():
     x_noise = 0.1
     v_noise = 0.08
     m_noise = 0.05
-    reduce_risk = True
+    reduce_risk = 0.0
     input_seq_len = 100
     output_seq_len = 50
     trials = 500
@@ -305,7 +303,7 @@ def strategy_vs_transaction_cost():
     plt.savefig('strategy_vs_transaction_cost/images/transaction_cost.png')
     plt.show()
 
-def noise_vs_risk():
+def noise_vs_risk(experiment_name='experiment'):
 
     make_dirs('noise_vs_risk')
 
@@ -313,24 +311,24 @@ def noise_vs_risk():
     v_noise_initial = 0.08
     m_noise = 0.05
     order_type = 2
-    transaction_cost = 0.05
+    transaction_cost = 0.02
     input_seq_len = 100
     output_seq_len = 50
-    trials = 500
-    simulations_per_trial = 500
+    trials = 100
+    simulations_per_trial = 100
     strategy = 1
     
     df = pd.DataFrame([])
-    df['extra_noise'] = np.arange(0,20,2)/10.0
+    df['extra_noise'] = np.arange(0,20,5)/10.0
     
-    colors = ['r', 'b']
+    colors = ['c', 'b', 'g', 'y', 'm', 'r']
     i = 0
     plt.figure('noise_vs_risk')
-    for reduce_risk in [False,True]:
+    for reduce_risk in [0.0, 0.2, 0.4, 0.6, 0.8, 1.]:
         i+=1
         print('reduce_risk: ', reduce_risk)
         errors = []
-        for extra_noise in np.arange(0,20,2)/10.0:
+        for extra_noise in np.arange(0,20,5)/10.0:
             print('extra_noise: ', extra_noise)
             v_noise = v_noise_initial * (1.0+extra_noise)
             x_noise = x_noise_initial * (1.0+extra_noise)
@@ -338,40 +336,46 @@ def noise_vs_risk():
                             x_noise, v_noise, m_noise, reduce_risk)            
             error = np.mean(np.subtract(targets,estimates))
             errors.append(error)
-        plt.plot(np.arange(0,20,2)/10.0, errors, c=colors[i-1], label = str(reduce_risk) )
-        df[str(strategies(strategy).name)] = errors
+        plt.xlabel('model noise')
+        plt.ylabel('difference between target- and resulting ROI')
+        plt.plot(np.arange(0,20,5)/10.0, errors, c=colors[i-1], label = str(reduce_risk))
+        df[str(reduce_risk)] = errors
     plt.legend()
-    df.to_csv('noise_vs_risk/results/noise.csv')
-    plt.savefig('noise_vs_risk/images/noise.png')
+    df.to_csv('noise_vs_risk/results/'+experiment_name+'.csv')
+    plt.savefig('noise_vs_risk/images/'+experiment_name+'.png')
     plt.show()
 
 def show_an_example():
     x_noise = 0.1
     v_noise = 0.08
     m_noise = 0.05
-    reduce_risk = 0.7
-    order_type = 2
-    transaction_cost = 0.05
+    reduce_risk = 1.0
+    order_type = 1
+    transaction_cost = 0.02
     input_seq_len = 100
     output_seq_len = 50
-    strategy = 1
-
-    print(evaluate_model(
-        prob_model=ProbModel(4, measurement_noise=m_noise, x_noise = x_noise , v_noise = v_noise),
-        event_function=make_buy_sell_events,
-        strategy = str(strategies(strategy).name),
-        n_run_steps = input_seq_len, 
-        n_simulations = 50,
-        n_eval_steps = output_seq_len, 
-        transaction_cost = transaction_cost,
-        reduce_risk = reduce_risk,
-        order_type = str(order_types(order_type).name),
-        make_fig = True
-        ))
+    strategy = 2
+    for i in range(20):
+        print(evaluate_model(
+            prob_model=ProbModel(i, measurement_noise=m_noise, x_noise = x_noise , v_noise = v_noise),
+            event_function=make_buy_sell_events,
+            strategy = str(strategies(strategy).name),
+            n_run_steps = input_seq_len, 
+            n_simulations = 50,
+            n_eval_steps = output_seq_len, 
+            transaction_cost = transaction_cost,
+            reduce_risk = reduce_risk,
+            order_type = str(order_types(order_type).name),
+            make_fig = True
+            ))
 
 if __name__ == '__main__':
 
-    show_an_example()
+    noise_vs_risk(experiment_name='limit_order_do_it_good')
+
+    # show_an_example()
+
+    # order_type_vs_strategy()
 
 
    
