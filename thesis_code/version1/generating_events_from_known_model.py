@@ -44,14 +44,9 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
             if order_type == 'market_order':
                 amount -= (timeseries[i+buy[-1]] * (1+transaction_cost))
                 amount += (timeseries[i+sell[-1]] * (1-transaction_cost))
-                # plt.plot(timeseries[i:i+10])
-                # plt.axvline(buy[-1])
-                # plt.axvline(sell[-1])
-                # print(amount)
-                # plt.show()
             elif order_type == 'limit_order':
-                for j in range(len(timeseries[i:])):
-                    b = False
+                b = False
+                for j in range(len(timeseries[i:i+10])):
                     # find the first buy oppertunity = when observed
                     # price is lower then what you are willing to pay 
                     if timeseries[i+j] <=buy[1] and not b:
@@ -59,15 +54,9 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
                         b = True
                     # afterwards, find the first sell oppertunity = when observed
                     # price is higher then what you are asking for it
-                    elif timeseries[i+j] >=sell[1] and b:
+                    elif timeseries[i+j] >= sell[1] and b:
                         amount += timeseries[i+j]
                         break
-
-                plt.plot(timeseries[i:i+10])
-                plt.axhline(buy[1], c='m')
-                plt.axhline(sell[1], c='c')
-                print(amount)
-                plt.show()
     return amount
 
 
@@ -203,7 +192,7 @@ def run(N = 10, show=True):
     x_noise = 0.1
     v_noise = 0.08
     m_noise = 0.05
-    reduce_risk = 0.0
+    reduce_risk = 1.0
     transaction_cost = 0.02
     output_seq_len = 10
     strategy = 1
