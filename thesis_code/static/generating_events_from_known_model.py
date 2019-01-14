@@ -9,14 +9,24 @@ import pandas as pd
 
 from enum import Enum
 
-from strategies_v2 import *
+from strategies import *
 
 
 class strategies(Enum):
-        now_or_never = 1
-        if_you_do_it_do_it_good = 2
+    """
+    now or never: only alow to buy now
+    if you do it do it good: only buy at the best buy moment
+
+    """
+    now_or_never = 1
+    if_you_do_it_do_it_good = 2
 
 class order_types(Enum):
+    """
+    market order: place a buy/sell order for a specific timestamp
+    limit_order: place a buy/sell order for a specific price
+
+    """
     market_order = 1
     limit_order = 2
 
@@ -35,8 +45,9 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
             # market order are time specific, and cost a fee
             if order_type == 'market_order':
                 amount -= (timeseries[time_step] * (1+transaction_cost))
-            # limit orders are price specific and are free
+            # limit orders are price specific and are free or charge
             elif order_type == 'limit_order':
+                # you can buy when your order is higher than asking price
                 options =  [p for p in timeseries if p<=price] 
                 if options:
                     amount -= options[0]
@@ -44,6 +55,7 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
             if order_type == 'market_order':
                 amount += (timeseries[time_step] * (1-transaction_cost))
             elif order_type == 'limit_order':
+                # you can sell when your order is lower than bidding price
                 options = [p for p in timeseries if p>=price]
                 if options:
                     amount += options[0]
@@ -51,6 +63,13 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
 
 
 class ProbModel:
+    """
+    Harmonic Oscillator model
+    :param seed: random see that determines the properties of the oscillator
+    :param x_noise: noise of location transition, 0.08 is medium noisy
+    :param v_noise: noise of velocity transition, 0.1 is medium noisy
+    :param measurement_noise: noise of observation, 0.05 is light noisy
+    """
 
     def __init__(self, seed, dt=0.1, measurement_noise=0.05, x_noise = 0.1 , v_noise = 0.08):
         # system parameters
@@ -100,6 +119,12 @@ def make_buy_sell_events(futures, strategy, transaction_cost, reduce_risk, order
 def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: str, n_run_steps = 10, 
                     n_eval_steps = 10, transaction_cost=1, reduce_risk=0., order_type='market_order', 
                     n_simulations=1000, initial_seed=1234, make_fig=False):
+
+    """
+    Runs a simulation with the given ProbModel, and if make_fig is True it shows the simulations
+
+    :return the total return on investment given the stratgy, for both the simulations and the actual future
+    """
     # limit orders have no transaction costs
     if order_type == 'limit_order':
         transaction_cost = 0.0 
@@ -124,11 +149,11 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
     else:
         roi = 0
 
-    true_events = event_function([true_future], strategy, transaction_cost, 0.0, order_type)
-    if true_events:
-        target_roi = compute_roi(true_future, true_events, transaction_cost, order_type)
+    if strategy == 'if_you_do_it_do_it_good':
+        target_roi = np.max([0, np.max(true_future) - np.min(true_future)])
     else:
-        target_roi = 0
+        target_roi = np.max([0, np.max(true_future) - true_future[0]])
+
 
     if make_fig:
         plt.figure()
@@ -140,10 +165,10 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
                 color = 'm' if event[0] == 'buy' else 'g'
                 plt.axvline(x=event[-1]+n_run_steps, label=event[0], c=color)
                 plt.axhline(y=event[1], label='price_'+event[0], c=color)
-        if true_events:
-            for event in true_events:
-                color = 'y' if event[0] == 'buy' else 'c'
-                plt.axvline(x=event[-1]+n_run_steps, label='true_'+event[0], c=color)
+        # if true_events:
+        #     for event in true_events:
+        #         color = 'y' if event[0] == 'buy' else 'c'
+        #         plt.axvline(x=event[-1]+n_run_steps, label='true_'+event[0], c=color)
                 
         plt.legend()
         # plt.savefig('experiment_'+strategy+'_'+str(prob_model.seed)+'.png')
@@ -186,15 +211,15 @@ def strategy_vs_sample_size(experiment_name='experiment'):
     x_noise = 0.1
     v_noise = 0.08
     m_noise = 0.05
-    reduce_risk = False
+    reduce_risk = 0.0
     order_type = 1
     transaction_cost = 0.02
     input_seq_len = 100
     output_seq_len = 50
-    trials = 500
+    trials = 100
     
     df = pd.DataFrame([])
-    df['simulations_per_trial'] = [50, 100, 500, 1000]
+    # df['simulations_per_trial'] = [50, 100, 500, 1000]
 
     colors = ['r', 'b']
     plt.figure('strategy_vs_sample_size')
@@ -310,7 +335,7 @@ def noise_vs_risk(experiment_name='experiment'):
     x_noise_initial = 0.1
     v_noise_initial = 0.08
     m_noise = 0.05
-    order_type = 2
+    order_type = 1
     transaction_cost = 0.02
     input_seq_len = 100
     output_seq_len = 50
@@ -349,12 +374,12 @@ def show_an_example():
     x_noise = 0.1
     v_noise = 0.08
     m_noise = 0.05
-    reduce_risk = 1.0
+    reduce_risk = 0.0
     order_type = 1
     transaction_cost = 0.02
     input_seq_len = 100
     output_seq_len = 50
-    strategy = 2
+    strategy = 1
     for i in range(20):
         print(evaluate_model(
             prob_model=ProbModel(i, measurement_noise=m_noise, x_noise = x_noise , v_noise = v_noise),
@@ -371,9 +396,9 @@ def show_an_example():
 
 if __name__ == '__main__':
 
-    noise_vs_risk(experiment_name='limit_order_do_it_good')
+    # strategy_vs_sample_size(experiment_name='market')
 
-    # show_an_example()
+    show_an_example()
 
     # order_type_vs_strategy()
 
