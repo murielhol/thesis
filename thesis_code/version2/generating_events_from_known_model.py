@@ -173,7 +173,7 @@ def run(N = 10, show=True):
     x_noise = 0.1
     v_noise = 0.08
     m_noise = 0.05
-    reduce_risk = 0.1
+    reduce_risk = 0.0
     transaction_cost = 0.02
     output_seq_len = 5
     strategy = 1
@@ -188,7 +188,7 @@ def run(N = 10, show=True):
             event_function=make_buy_sell_events,
             strategy = str(strategies(strategy).name),
             n_run_steps = 200, 
-            n_simulations = 500,
+            n_simulations = 100,
             n_eval_steps = output_seq_len, 
             transaction_cost = transaction_cost,
             reduce_risk = reduce_risk,
@@ -202,8 +202,7 @@ def run(N = 10, show=True):
 
 if __name__ == '__main__':
 
-
-    run(N=10, show=True)
+    run(N=10, show=False)
 
 
 

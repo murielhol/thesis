@@ -6,7 +6,6 @@ sns.set(style="whitegrid")
 import copy
 import os
 import pandas as pd
-
 from enum import Enum
 
 from strategies import *
@@ -149,24 +148,30 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
         else:
             target_roi += np.max([0, np.max(true_future)*(1-transaction_cost) - true_future[0]*(1+transaction_cost)])
     
-    print(roi, target_roi)
-
     if make_fig:
         plt.plot(context, label='true future')
         legend = True
         for t in range(n_run_steps):
             event = events[t]
-            if event==2:
+            if len(event)==2:
                 buy = event[0]
                 sell = event[1]
                 if legend:
-                    plt.scatter(t+buy[-1], 1, c='g', label='buy')
-                    plt.scatter(t+sell[-1], 1, c='r', label='sell')
+                    if order_type=='market_order':
+                        plt.scatter(t+buy[-1], 2, c='g', label='buy moment')
+                        plt.scatter(t+sell[-1], 2, c='r', label='sell moment')
+                    else: 
+                        plt.scatter(t, buy[1], c='g', label='buy price')
+                        plt.scatter(t, sell[1], c='r', label='sell price')
                     legend = False
                 else:
-                    plt.scatter(t+buy[-1], 1, c='g')
-                    plt.scatter(t+sell[-1], 1, c='r')
-            
+                    if order_type=='market_order':
+                        plt.scatter(t+buy[-1], 2, c='g')
+                        plt.scatter(t+sell[-1], 2, c='r')
+                    else:
+                        plt.scatter(t, buy[1], c='g')
+                        plt.scatter(t, sell[1], c='r')
+                
         plt.legend(loc=9, bbox_to_anchor=(0.5, -0.1), ncol=3)
         plt.subplots_adjust(bottom=0.2)
         plt.savefig('example'+str(prob_model.seed)+'.png')
@@ -192,11 +197,11 @@ def run(N = 10, show=True):
     x_noise = 0.1
     v_noise = 0.08
     m_noise = 0.05
-    reduce_risk = 1.0
+    reduce_risk = 0.0
     transaction_cost = 0.02
-    output_seq_len = 10
+    output_seq_len = 5
     strategy = 1
-    order_type = 2
+    order_type = 1
 
     ROI = []
     TARGET_ROI = []
@@ -208,7 +213,7 @@ def run(N = 10, show=True):
             event_function=make_buy_sell_events,
             strategy = str(strategies(strategy).name),
             n_run_steps = 200, 
-            n_simulations = 500,
+            n_simulations = 100,
             n_eval_steps = output_seq_len, 
             transaction_cost = transaction_cost,
             reduce_risk = reduce_risk,
@@ -223,8 +228,7 @@ def run(N = 10, show=True):
 
 if __name__ == '__main__':
 
-
-    run(N=10, show=True)
+    run(N=10, show=False)
 
 
 
