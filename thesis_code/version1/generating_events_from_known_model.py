@@ -8,7 +8,6 @@ import os
 import pandas as pd
 from enum import Enum
 
-from strategies import *
 
 
 class strategies(Enum):
@@ -60,21 +59,28 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
 
 
 
-class ProbModel:
+class NoisySinusoidProbModel:
 
-    def __init__(self, seed, dt=0.1, measurement_noise=0.05, x_noise = 0.1 , v_noise = 0.08):
+    def __init__(self, freq = 2., x0=0., v0=1., dt=0.1, measurement_noise=0.05, x_noise = 0.1 , v_noise = 0.08):
         # system parameters
-        np.random.seed(seed)
-        self.seed = seed
-        self.freq = np.random.uniform(1.0,4.0)
+        # rng = np.random.RandomState(seed)
+        self.freq = freq
         self.x_noise = x_noise
         self.v_noise = v_noise
         self.dt = dt
         self.measurement_noise=measurement_noise
-        direction = np.random.choice([-1, 1])
-        self.x, self.v = np.random.uniform(-1.0,1.0), direction*np.random.uniform(0.5,2.0)
+        self.x, self.v = x0, v0
         self.initial_energy = self.energy(self.x, self.v)
-        
+
+    @classmethod
+    def from_rand_init(cls, seed, **kwargs):
+        rng = np.random.RandomState(seed)
+        freq = rng.uniform(1.0,4.0)
+        x = rng.uniform(-1.0,1.0)
+        direction = rng.choice([-1, 1])
+        v = direction*rng.uniform(0.5,2.0)
+        return NoisySinusoidProbModel(x0=x, v0=v, freq=freq, **kwargs)
+
     def energy(self, x, v):
         return np.sqrt(1/(self.freq**2)*v**2 + x**2)
 
@@ -94,7 +100,7 @@ class ProbModel:
         simulation = [self.step(rng) for _ in range(n_steps)]
         return simulation
 
-    def clone(self) -> 'ProbModel':
+    def clone(self) -> 'NoisySinusoidProbModel':
         """Return a clone of this model with the same state"""
         return copy.deepcopy(self)
 
@@ -107,9 +113,9 @@ def make_buy_sell_events(futures, strategy, transaction_cost, reduce_risk, order
     return events
     
 
-def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: str, n_run_steps = 10, 
-                    n_eval_steps = 10, transaction_cost=1, reduce_risk=0., order_type='market_order',
-                    n_simulations=500, initial_seed=1234, make_fig=False):
+def evaluate_model(prob_model: NoisySinusoidProbModel, event_function: Callable, strategy: str, n_run_steps = 10,
+                   n_eval_steps = 10, transaction_cost=1, reduce_risk=0., order_type='market_order',
+                   n_simulations=500, initial_seed=1234, make_fig=False):
 
     """
     Runs a simulation with the given ProbModel, and if make_fig is True it shows the simulations
@@ -209,7 +215,7 @@ def run(N = 10, show=True):
     for i in range(N):
         print('Running experiment', i, '...')
         roi, target_roi = evaluate_model(
-            prob_model=ProbModel(i, measurement_noise=m_noise, x_noise = x_noise , v_noise = v_noise),
+            prob_model=NoisySinusoidProbModel.from_rand_init(seed=i, measurement_noise=m_noise, x_noise = x_noise, v_noise = v_noise),
             event_function=make_buy_sell_events,
             strategy = str(strategies(strategy).name),
             n_run_steps = 200, 
