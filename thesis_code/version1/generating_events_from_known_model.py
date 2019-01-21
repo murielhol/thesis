@@ -232,11 +232,6 @@ def run(N = 10, show=True):
     print('mean roi: ', np.mean(ROI))
     print('mean target roi: ', np.mean(TARGET_ROI), '\n')
 
+
 if __name__ == '__main__':
-
     run(N=10, show=False)
-
-
-
-   
-

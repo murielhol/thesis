@@ -81,7 +81,7 @@ if __name__ == '__main__':
 
     transaction_chooser(
         futures_stream=make_sinusoidal_futures_stream(
-            model = NoisySinusoidProbModel(freq = 1., x_noise=0.1, v_noise = 0.08),
+            model = NoisySinusoidProbModel(freq = 1., x_noise=0.1, v_noise = 0.2, measurement_noise=0.2),
             n_steps = 100,
             n_samples = 10,
         ),
