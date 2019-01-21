@@ -13,9 +13,10 @@ from strategies import *
 
 class strategies(Enum):
         expected_return = 1
+        max_expected_return = 2
 
 
-def compute_roi(timeseries: Sequence[float], events: Sequence[str], transaction_cost) -> float:
+def compute_roi(timeseries: Sequence[float], events: Sequence[str], transaction_cost, show=False) -> float:
     """
     Given a timeseries and a list of events, compute the return on investment
     Note: only buys once every tick, but sells everything within 1 tick
@@ -26,18 +27,29 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[str], transaction_
     :return: total return made after excecuting the events on timeseries
 
     """
-    amount=0
-    buy = 0
+    roi = 0
+    current_price = timeseries[0]
+    returns = [(p/current_price)-1 for p in timeseries]
+    bought = 0 # keep track of how much you have bought 
+    wallet = 0 # keep track of how many "coins" you have bought
+    plt.figure('events')
+    plt.plot(timeseries)
     for i in range(len(events)):
         event = events[i]
         if event=='buy':
-            amount -= (timeseries[i]*(1+transaction_cost))
-            buy += 1
-        if event=='sell' and buy>0:
-            amount += buy*(timeseries[i]*(1-transaction_cost))
-            buy = 0
-    return amount
+            bought += ((returns[i]+1)*(1+transaction_cost))
+            wallet += 1
+            plt.scatter(i, timeseries[i], c='g')
+        if event=='sell' and wallet > 0:
+            plt.scatter(i, timeseries[i], c='r')
+            roi +=  ((wallet*((returns[i]+1)*(1-transaction_cost))) - bought)
+            bought = 0 # empty the wallet
+            wallet = 0
 
+    sharpe_ratio = roi / np.std(returns)
+    if show:
+        plt.show()
+    return roi, sharpe_ratio
 
 class ProbModel:
     """
@@ -126,11 +138,11 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
 
     true_events = []
     for t in range(n_run_steps):
-        event = event_function([context[t:t+n_eval_steps]], strategy, transaction_cost, reduce_risk=0.0)
+        event = event_function([context[t:t+n_eval_steps+1]], strategy, transaction_cost, reduce_risk=0.0)
         true_events.append(event)
 
-    roi = compute_roi(context, events, transaction_cost)
-    target_roi = compute_roi(context, true_events, transaction_cost)
+    roi, sharpe_ratio = compute_roi(context, events, transaction_cost)
+    target_roi, target_sharpe_ratio = compute_roi(context, true_events, transaction_cost)
 
     if make_fig:
         plt.plot(context, label='true future')
@@ -148,12 +160,18 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
                     legend_sell = False
                 else:
                     plt.scatter(t, context[t], c='r')
-        plt.legend(loc=9, bbox_to_anchor=(0.5, -0.1), ncol=3)
+            elif events[t]=='hold':
+                if legend_sell:
+                    plt.scatter(t, context[t], c='y', label='hold')
+                    legend_sell = False
+                else:
+                    plt.scatter(t, context[t], c='r')
+        plt.legend(loc=9, bbox_to_anchor=(0.5, -0.1), ncol=4)
         plt.subplots_adjust(bottom=0.2)
         plt.savefig('example'+str(prob_model.seed)+'.png')
         plt.show()
 
-    return roi, target_roi
+    return roi, sharpe_ratio, target_roi, target_sharpe_ratio
 
 
 
@@ -170,36 +188,59 @@ def run(N = 10, show=True):
     reduce_risk: between 0 and 1, 0 is no risk reduction, 1 is
     """
 
-    x_noise = 0.1
-    v_noise = 0.08
-    m_noise = 0.05
-    reduce_risk = 0.0
-    transaction_cost = 0.02
+    x_noise = 0.5
+    v_noise = 0.25
+    m_noise = 0.25
+    reduce_risk = 0.5
+    transaction_cost = 0.00
     output_seq_len = 5
-    strategy = 1
+    strategy = 2
+    number_of_ticks = 200
+    nuber_of_simulations = 200
 
     ROI = []
+    SR = []
     TARGET_ROI = []
+    TSR = []
 
     for i in range(N):
         print('Running experiment', i, '...')
-        roi, target_roi = evaluate_model(
-            prob_model=ProbModel(i, measurement_noise=m_noise, x_noise = x_noise , v_noise = v_noise),
-            event_function=make_buy_sell_events,
-            strategy = str(strategies(strategy).name),
-            n_run_steps = 200, 
-            n_simulations = 100,
-            n_eval_steps = output_seq_len, 
-            transaction_cost = transaction_cost,
-            reduce_risk = reduce_risk,
-            make_fig = show
-            )
+        roi, sharpe_ratio, target_roi, target_sharpe_ratio = \
+            evaluate_model(
+                prob_model=ProbModel(i, measurement_noise=m_noise, x_noise = x_noise , v_noise = v_noise),
+                event_function=make_buy_sell_events,
+                strategy = str(strategies(strategy).name),
+                n_run_steps = number_of_ticks, 
+                n_simulations = nuber_of_simulations,
+                n_eval_steps = output_seq_len, 
+                transaction_cost = transaction_cost,
+                reduce_risk = reduce_risk,
+                make_fig = show
+                )
 
         ROI.append(roi)
+        SR.append(sharpe_ratio)
         TARGET_ROI.append(target_roi)
-    print('mean roi: ', np.mean(ROI))
-    print('mean target roi: ', np.mean(TARGET_ROI), '\n')
-
+        TSR.append(target_sharpe_ratio)
+    print('mean roi: ', np.mean(ROI), 'mean sharpe ratio: ', np.mean(SR))
+    print('mean target roi: ', np.mean(TARGET_ROI), 'mean target sharpe ratio: ', np.mean(TSR), '\n')
+    f =  open(str(strategy)+str(output_seq_len)+str(transaction_cost)+str(reduce_risk)+str(m_noise)\
+        +str(x_noise)+str(v_noise)+'.txt', 'w')
+    f.write('strategy: '+ str(strategy)+'\n')
+    f.write('output_seq_len: '+str(output_seq_len)+'\n')
+    f.write('transaction_cost: '+str(transaction_cost)+'\n')
+    f.write('reduce_risk: '+str(reduce_risk)+'\n')
+    f.write('m_noise: '+str(m_noise)+'\n')
+    f.write('x_noise: '+str(x_noise)+'\n')
+    f.write('v_noise: '+str(v_noise)+'\n')
+    f.write('runs: '+ str(N)+'\n')
+    f.write('nuber_of_simulations: '+str(nuber_of_simulations)+'\n')
+    f.write('number_of_ticks: '+str(number_of_ticks)+'\n')
+    f.write('roi: '+ str(ROI)+'\n')
+    f.write('target roi: '+ str(target_roi)+'\n')
+    f.write('sharpe_ratio: '+ str(sharpe_ratio)+'\n')
+    f.write('target_sharpe_ratio: '+ str(target_sharpe_ratio)+'\n')
+    f.close()
 if __name__ == '__main__':
 
     run(N=10, show=False)
