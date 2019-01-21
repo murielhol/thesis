@@ -1,6 +1,8 @@
-import itertools
 from collections import namedtuple
+from typing import Iterable, Tuple
+
 import numpy as np
+
 from artemis.plotting.db_plotting import dbplot, hold_dbplots, use_dbplot_axis, DBPlotTypes
 import matplotlib.pyplot as plt
 
@@ -47,40 +49,41 @@ def transaction_chooser(futures_stream, transaction_cost, initial_have_state = F
             t_sell = next((tau for tau, m in enumerate(expected_future) if m > x0 + transaction_cost), None)  # Get next meeting criterion or None if it is never met.
             if t_sell is not None:
                 if t_sell==0 or expected_future[:t_sell].min() >= x0:
-                    print('BUY BUY BUY')
+                    print(f'Buying at t={t}, for ${x0:.3g}')
                     mark_trade(trade = Trade(time=t, price=x0, type=TradeTypes.BUY), ax = use_dbplot_axis('futures'))
                     have_state = True
         else:
             t_buy = next((tau for tau, m in enumerate(expected_future) if m < x0 - transaction_cost), None)
             if t_buy is not None:
                 if t_buy==0 or not expected_future[:t_buy].max() > x0:
-                    print('SELL SELL SELL')
+                    print(f'Selling at t={t}, for ${x0:.3g}')
                     mark_trade(trade = Trade(time=t, price=x0, type=TradeTypes.SELL), ax=use_dbplot_axis('futures'))
                     have_state = False
 
 
-def make_sinusoidal_futures_stream(n_samples = 10, n_steps=100, freq=1., seed=1234):
+def make_sinusoidal_futures_stream(model: NoisySinusoidProbModel, n_samples = 10, n_steps=100, seed=1234) -> Iterable[Tuple[float, np.ndarray]]:
     """
     Generate a stream of futures predictions.
     :param n_samples: Number if independent samples
     :param n_steps: Number of steps into future to predict.
     :param driftiness: The amount of random drift in our model (more means more randomness)
-    :return Iterable[Tuple[float, ndarray]]: Yields (current_sample, futures) futures[s, t] corresponding to the
+    :return: Yields (current_sample, futures) futures[s, t] corresponding to the
         prediction of sample s, t+1 steps into the future.
     """
-    model = NoisySinusoidProbModel(freq = freq)
-    true_rng = np.random.RandomState(seed)
-    sim_rngs = [np.random.RandomState(seed+i) for i in range(1, n_samples+1)]
-
+    rng = np.random.RandomState(seed)
     while True:
-        sample = model.step(true_rng)
-        futures = np.array([model.clone().simulate(n_steps=n_steps, rng=rng) for rng in sim_rngs])
+        sample = model.step(rng)
+        futures = np.array([model.clone().simulate(n_steps=n_steps, rng=rng) for _ in range (n_samples)])
         yield sample, futures
 
 
 if __name__ == '__main__':
 
     transaction_chooser(
-        futures_stream=make_sinusoidal_futures_stream(freq=2),
+        futures_stream=make_sinusoidal_futures_stream(
+            model = NoisySinusoidProbModel(freq = 1., x_noise=0.1, v_noise = 0.08),
+            n_steps = 100,
+            n_samples = 10,
+        ),
         transaction_cost=0.5,
     )
