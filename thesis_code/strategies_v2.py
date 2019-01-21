@@ -1,8 +1,11 @@
 import numpy as np
-import itertools
+from thesis_code.utils import expected_shortfall, expected_highfall
 
 
-from utils import *
+def eval_named_strategy(futures, strategy_name, reduce_risk, order_method, transaction_cost):
+    strategy = {'now_or_never': now_or_never, 'if_you_do_it_do_it_good': if_you_do_it_do_it_good}[strategy_name]
+    return strategy(futures=futures, reduce_risk=reduce_risk, order_method=order_method, transaction_cost=transaction_cost)
+
 
 def now_or_never(futures, reduce_risk=0.0, order_method = 'market_order', transaction_cost=0.0):
 
@@ -42,6 +45,7 @@ def now_or_never(futures, reduce_risk=0.0, order_method = 'market_order', transa
                 ('sell', selling_price, selling_moment+1)]
     else:
         return None
+
 
 def if_you_do_it_do_it_good(futures, reduce_risk=0.9, order_method = 'market_order', transaction_cost=0.0):
 

@@ -24,6 +24,15 @@ def get_cdf(data, samples, method='ecdf', bandwidth='1.0'):
         return -1
 
 def value_at_risk(samples, alpha=5):
+    """
+    Given an empirical distribution defined by the samples, the VAR is the alpha's percentile value of this distribution.
+
+    Intuitively a VAR with alpha = 5 means: "If we're not in the worst 5% of cases, the most we can lose is <VAR>"
+
+    :param samples:
+    :param alpha: The cutoff percentage
+    :return:
+    """
     N = len(samples)
     samples.sort()
     var = np.percentile(samples, alpha)
@@ -31,6 +40,13 @@ def value_at_risk(samples, alpha=5):
     return var
 
 def expected_shortfall(samples, alpha=5):
+    """
+    The expected return in the worst alpha % of cases.
+
+    :param samples:
+    :param alpha: The
+    :return:
+    """
     var = value_at_risk(samples, alpha=alpha)
     risky_samples = [s for s in samples if s < var]
     return np.mean(risky_samples)

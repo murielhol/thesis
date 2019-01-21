@@ -2,14 +2,16 @@ from typing import Sequence, Tuple, Callable
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+from thesis_code.strategies_v2 import eval_named_strategy
+from thesis_code.utils import make_dirs
+
 sns.set(style="whitegrid")
 import copy
 import os
 import pandas as pd
 
 from enum import Enum
-
-from strategies_v2 import *
 
 
 class strategies(Enum):
@@ -21,7 +23,7 @@ class order_types(Enum):
     limit_order = 2
 
 
-def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], transaction_cost, order_type = 'market_order') -> float:
+def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, float, int]], transaction_cost, order_type = 'market_order') -> float:
     """
     Given a timeseries and a list of events, compute the return on investment
     :param timeseries: A array of n_steps data points
@@ -37,20 +39,25 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[Tuple[str, int]], 
                 amount -= (timeseries[time_step] * (1+transaction_cost))
             # limit orders are price specific and are free
             elif order_type == 'limit_order':
-                options =  [p for p in timeseries if p<=price] 
+                options = [p for p in timeseries if p<=price]
                 if options:
                     amount -= options[0]
-        if event_type=='sell':
+        elif event_type=='sell':
             if order_type == 'market_order':
                 amount += (timeseries[time_step] * (1-transaction_cost))
             elif order_type == 'limit_order':
                 options = [p for p in timeseries if p>=price]
                 if options:
                     amount += options[0]
+        else:
+            raise NotImplementedError(event_type)
     return amount
 
 
 class ProbModel:
+    """
+    A noisy sinusoid model.
+    """
 
     def __init__(self, seed, dt=0.1, measurement_noise=0.05, x_noise = 0.1 , v_noise = 0.08):
         # system parameters
@@ -93,13 +100,34 @@ def make_buy_sell_events(futures, strategy, transaction_cost, reduce_risk, order
     """
     tuple in form of: ('event', price, moment)
     """
-    events = eval(strategy)(futures, reduce_risk, order_method=order_type, transaction_cost=transaction_cost)
+    events = eval_named_strategy(futures=futures, strategy_name=strategy, reduce_risk=reduce_risk, transaction_cost=transaction_cost, order_method=order_type)
+    # events = eval(strategy)(futures, reduce_risk, order_method=order_type, transaction_cost=transaction_cost)
     return events
     
 
 def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: str, n_run_steps = 10, 
                     n_eval_steps = 10, transaction_cost=1, reduce_risk=0., order_type='market_order', 
                     n_simulations=1000, initial_seed=1234, make_fig=False):
+    """
+    Given a probabilistic model that produces simulated data runs, run it for n_run_steps, to generate context data.
+    Then generate n_futures possible futures from the model, and 1 "true" future.  Use the future information to generate
+    trading events, from which you will produce a "model" ROI, and a "true" ROI.
+
+    Note... w
+
+    :param prob_model:
+    :param event_function:
+    :param strategy:
+    :param n_run_steps:
+    :param n_eval_steps:
+    :param transaction_cost:
+    :param reduce_risk:
+    :param order_type:
+    :param n_simulations:
+    :param initial_seed:
+    :param make_fig:
+    :return:
+    """
     # limit orders have no transaction costs
     if order_type == 'limit_order':
         transaction_cost = 0.0 
@@ -135,28 +163,44 @@ def evaluate_model(prob_model: ProbModel, event_function: Callable, strategy: st
         plt.plot(context, c='r')
         plt.plot((np.arange(n_run_steps, n_run_steps+n_eval_steps+1)*np.ones(np.shape(futures))).T, np.array(futures).T, alpha=0.5, c='b')
         plt.plot(np.arange(n_run_steps, n_run_steps+n_eval_steps+1), true_future, c='r')
+
+        def mark_trade(trade_event, color, label_prefix=''):
+            trade_type, trade_price, trade_time = trade_event
+            plt.plot(trade_time+n_run_steps, trade_price, marker='x' if trade_type == 'buy' else 'o', markersize=10, color=(0, 0, 0, 0), markeredgecolor=color, markeredgewidth=3, label=label_prefix+trade_type)
+
         if events:
             for event in events:
-                color = 'm' if event[0] == 'buy' else 'g'
-                plt.axvline(x=event[-1]+n_run_steps, label=event[0], c=color)
-                plt.axhline(y=event[1], label='price_'+event[0], c=color)
+                mark_trade(event, color='k')
+                print('Made Plot')
         if true_events:
             for event in true_events:
-                color = 'y' if event[0] == 'buy' else 'c'
-                plt.axvline(x=event[-1]+n_run_steps, label='true_'+event[0], c=color)
-                
+                mark_trade(event, color='r', label_prefix='true_')
+
         plt.legend()
         # plt.savefig('experiment_'+strategy+'_'+str(prob_model.seed)+'.png')
         plt.show()
 
-
     return roi, target_roi
-
-
 
 
 def run_experiments(trials, simulations_per_trial, strategy, order_type, transaction_cost, input_seq_len, output_seq_len,
                     x_noise, v_noise, m_noise, reduce_risk):
+    """
+    Repeatedly evaluate a model with different seeds, computing the ROI and target ROI on each one.
+    :param trials:
+    :param simulations_per_trial:
+    :param strategy:
+    :param order_type:
+    :param transaction_cost:
+    :param input_seq_len:
+    :param output_seq_len:
+    :param x_noise:
+    :param v_noise:
+    :param m_noise:
+    :param reduce_risk:
+    :return:
+    """
+
     transaction_cost = transaction_cost if order_type == 1 else 0.0
 
     results = [
@@ -304,6 +348,13 @@ def strategy_vs_transaction_cost():
     plt.show()
 
 def noise_vs_risk(experiment_name='experiment'):
+    """
+    Demonstrate that risk-reduction helps reduce the difference between the target and resulting ROI.
+
+
+    :param experiment_name:
+    :return:
+    """
 
     make_dirs('noise_vs_risk')
 
@@ -345,19 +396,26 @@ def noise_vs_risk(experiment_name='experiment'):
     plt.savefig('noise_vs_risk/images/'+experiment_name+'.png')
     plt.show()
 
-def show_an_example():
-    x_noise = 0.1
-    v_noise = 0.08
-    m_noise = 0.05
-    reduce_risk = 1.0
-    order_type = 1
-    transaction_cost = 0.02
-    input_seq_len = 100
-    output_seq_len = 50
-    strategy = 2
+def show_an_example(
+        x_noise = 0.1,
+        v_noise = 0.08,
+        m_noise = 0.05,
+        reduce_risk = 1.0,
+        order_type = 1,
+        transaction_cost = 0.02,
+        input_seq_len = 100,
+        output_seq_len = 50,
+        strategy = strategies.if_you_do_it_do_it_good,
+    ):
+
+    """
+    Do various runs of the buy/sell thing with the probabilistic model, plot predictions and buy/sell times.
+
+    :return:
+    """
     for i in range(20):
         print(evaluate_model(
-            prob_model=ProbModel(i, measurement_noise=m_noise, x_noise = x_noise , v_noise = v_noise),
+            prob_model=ProbModel(i, measurement_noise=m_noise, x_noise = x_noise, v_noise = v_noise),
             event_function=make_buy_sell_events,
             strategy = str(strategies(strategy).name),
             n_run_steps = input_seq_len, 
@@ -371,12 +429,24 @@ def show_an_example():
 
 if __name__ == '__main__':
 
-    noise_vs_risk(experiment_name='limit_order_do_it_good')
+
+    # show_an_example(reduce_risk=0.)
+    show_an_example(reduce_risk=0.)
+
+    # noise_vs_risk()
+
+
+    # noise_vs_risk(experiment_name='limit_order_do_it_good')
 
     # show_an_example()
 
     # order_type_vs_strategy()
 
+
+    # pm = ProbModel(seed=1234)
+    # x = pm.simulate(n_steps=200, rng=np.random.RandomState())
+    # plt.plot(x)
+    # plt.show()
 
    
 
