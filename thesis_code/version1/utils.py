@@ -1,4 +1,6 @@
-import numpy as np 
+from collections import namedtuple
+
+import numpy as np
 import matplotlib.pyplot as plt 
 from scipy.stats import norm
 import os
