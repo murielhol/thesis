@@ -36,12 +36,12 @@ def value_at_risk(samples, alpha=5):
     N = len(samples)
     samples.sort()
     var = np.percentile(samples, alpha)
-    
     return var
 
 def expected_shortfall(samples, alpha=5):
     """
     The expected return in the worst alpha % of cases.
+    (expected left tail risk)
 
     :param samples:
     :param alpha: The
@@ -51,7 +51,11 @@ def expected_shortfall(samples, alpha=5):
     risky_samples = [s for s in samples if s < var]
     return np.mean(risky_samples)
 
+
 def expected_highfall(samples, alpha=95):
+    '''
+    expected right tail risk
+    '''
     var = value_at_risk(samples, alpha=alpha)
     risky_samples = [s for s in samples if s > var]
     return np.mean(risky_samples)

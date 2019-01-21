@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from thesis_code.strategies_v2 import eval_named_strategy
-from thesis_code.utils import make_dirs
+from thesis_code.version1.strategies import eval_named_strategy
+from thesis_code.version1.utils import make_dirs
 
 sns.set(style="whitegrid")
 import copy
