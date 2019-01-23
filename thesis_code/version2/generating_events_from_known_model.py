@@ -30,6 +30,7 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[str], transaction_
     roi = 0
     current_price = timeseries[0]
     returns = [(p/current_price)-1 for p in timeseries]
+    final_returns = []
     bought = 0 # keep track of how much you have bought 
     wallet = 0 # keep track of how many "coins" you have bought
     plt.figure('events')
@@ -41,6 +42,7 @@ def compute_roi(timeseries: Sequence[float], events: Sequence[str], transaction_
             wallet += 1
             plt.scatter(i, timeseries[i], c='g')
         if event=='sell' and wallet > 0:
+            # final_returns.append(wallet*[timeseries[i]])
             plt.scatter(i, timeseries[i], c='r')
             roi +=  ((wallet*((returns[i]+1)*(1-transaction_cost))) - bought)
             bought = 0 # empty the wallet

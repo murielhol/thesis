@@ -49,7 +49,7 @@ def max_expected_return(futures, reduce_risk=0.9, order_method = 'market_order',
     # risk can be reduced by asuming that at each time step, the futures below the value at risk
     # for that time step, will happen
     if reduce_risk>0:
-        time_slices = [samples_at_risk(time_slice, alpha=(1.-reduce_risk)*100.) for time_slice in time_slices]
+        time_slices = [samples_at_risk(time_slice, alpha=(1.- reduce_risk)*100.) for time_slice in time_slices]
     max_exp_ret = np.max([np.mean(np.divide(time_slice, current_price) - 1) for time_slice in time_slices])
     
     if max_exp_ret < 0:
